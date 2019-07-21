@@ -1,0 +1,127 @@
+console.log("Usage Syntax: scanScope(objectToScan, 'scanFor', ['whatToIgnore']);        %c(whatToIgnore is optional and can be a string, or an array of strings) (scanScope can be shortened to ss)", 'color: red'); 
+var abortAtLevel = 20,
+	callStack = 0,
+	errArray = [],
+	funArray = [],
+	scanLoop = function (whatToScan, scanValue, whatToIgnore, parentTree) {
+		scanValue = scanValue.toLowerCase();
+		if (Array.isArray(whatToIgnore)) {
+		  whatToIgnore.forEach(function (ignoreVal) {
+			ignoreVal = lowerCase(ignoreVal);
+		  });
+		} else {
+		  whatToIgnore = lowerCase(whatToIgnore);
+		}
+		var yesCheck = false,
+			insertString = '';
+		if (parentTree === undefined) {
+			callStack = 0;
+		}
+		callStack ++;
+		if (callStack > 1500) {
+			return;
+		}
+		for (var key in whatToScan) {
+			try {
+				yesCheck = (exists(whatToScan[key]) && (whatToScan[key].toString().indexOf !== undefined) && whatToScan[key].toString().toLowerCase !== undefined)
+				if ((yesCheck && whatToScan[key].toString().toLowerCase().indexOf(scanValue) > -1) || key.toLowerCase().indexOf(scanValue) >= 0) { // if we DO find a match...
+					if (dontIgnoreThis(whatToScan[key].toString().toLowerCase(), key.toLowerCase(), whatToIgnore)) { // check to see if we should ignore this match
+					  if (exists(parentTree)) {
+						insertString = parentTree + '.';
+					} else {
+						insertString = '';
+					}
+					if (!isAutoVar(key) && !isAutoVar(insertString)) { // by default just ignore anything starting with typical auto-values
+						if (exists(whatToScan[key]) && whatToScan[key].toString().indexOf('function') > -1) {
+							funArray.push(insertString + key + ' = ' + whatToScan[key]); // we found a function so add it to the funArray
+						} else {
+							console.log(insertString + key + ' = ' + whatToScan[key]); // we found an actual variable match
+						}
+					}
+					}
+				} else { // no match found, so...
+					if( (typeof whatToScan[key] === 'object') && (key !== null) ) { // ... if this is an object, jump into it and continue scanning
+						if (exists(whatToScan[key]) && exists(whatToScan[key].toString()) && whatToScan[key].toString().indexOf('$$') < 0) {
+							if (exists(parentTree)) {
+								insertString = parentTree + '.' + key;
+							} else {
+								insertString = '' + key;
+							}
+							if (dontIgnoreThis(whatToScan[key].toString().toLowerCase(), insertString.toLowerCase(), whatToIgnore) && !tooManyLevelsDeep(insertString) ) {
+							  scanLoop(whatToScan[key], scanValue, whatToIgnore, insertString);
+							}
+						}
+					}
+				}
+			} catch (err) {
+				errArray.push('>> ' + err + ' while scanning ' + key);
+			}
+		}
+	},
+	ss=scanScope = function (whatToScan, scanValue, whatToIgnore, parentTree) {
+		console.log('%c------------------------- Beginning scan', 'color: gold');
+		scanLoop(whatToScan, scanValue, whatToIgnore, parentTree);
+		if (funArray.length > 0 || errArray.length > 0) {
+			console.log('-------------------------');
+		}
+		if (funArray.length > 0) {
+			console.groupCollapsed('Functions found while scanning');
+			funArray.forEach(function(entry) {
+				console.log(entry);
+			});
+			console.groupEnd();
+		}
+		if (errArray.length > 0) {
+			console.groupCollapsed('Errors found while scanning');
+			errArray.forEach(function(entry) {
+				console.log(entry);
+			});
+			console.groupEnd();
+		}
+		console.log('%c------------------------- Scan complete', 'color: gold');
+	},
+	exists = function (whatToCheck) {
+	  if (whatToCheck !== null & whatToCheck !== undefined) {
+		return true;
+	  }
+	  return false;
+	},
+	lowerCase = function (whatToLower) {
+	  whatToLower = whatToLower !== undefined ? whatToLower.toLowerCase() : undefined;
+	  return whatToLower
+	},
+	dontIgnoreThis = function (valToCheck1, valToCheck2, valToIgnore) {
+	  if (!exists(valToIgnore)) {
+		return true;
+	  }
+	  var foundIgnoreInArrayCount = 0;
+	  if (Array.isArray(valToIgnore)) {
+		valToIgnore.forEach(function (thisIgnoreVal) {
+		  if (valToCheck1.indexOf(thisIgnoreVal) > -1 || valToCheck2.indexOf(thisIgnoreVal) > -1) {
+			foundIgnoreInArrayCount++;
+		  }
+		});
+		if (foundIgnoreInArrayCount > 0) {
+		  return false;
+		}
+	  } else {
+		if (valToCheck1.indexOf(valToIgnore) > -1 || valToCheck2.indexOf(valToIgnore) > -1) {
+		  return false;
+		}
+	  }
+	  return true;
+	},
+	tooManyLevelsDeep = function(valToCheck) {
+		if (valToCheck.length - valToCheck.replace(/\./g, '').length > abortAtLevel) {
+			return true;
+		}
+		return false;
+	},
+	isAutoVar = function(varToCheck) {
+	  var prefixList = ['__', '$$'];
+	  for (let prefix of prefixList) {
+		if (varToCheck.indexOf('.'+prefix) >= 0) return true;
+		if (varToCheck.substr(0,prefix.length) === prefix) return true;
+	  }
+	  return false;
+	};
